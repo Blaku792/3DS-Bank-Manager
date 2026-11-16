@@ -67,6 +67,43 @@ class Discovery(unittest.TestCase):
         self.assertEqual(self.rows[10], ["Archive", "stored"])
         self.assertEqual(self.rows[1][1], "absent")
 
+    def test_user_sd_configuration_in_disposable_fixture(self):
+        # Supplied bytes only; never open the physical SD or copy bank contents.
+        # https://github.com/Blaku792/3DS-Bank-Manager/pull/2#issuecomment-6927021606
+        ini = bytes.fromhex("5b33445342414e4b5d0d0a464f4c4445525f534c4f54203d20310d0a")
+        self.assertEqual(len(ini), 28)
+        self.assertEqual(ini, b"[3DSBANK]\r\nFOLDER_SLOT = 1\r\n")
+        self.assertEqual(hashlib.sha256(ini).hexdigest(),
+                         "40da4e46ffa9254855393ba730043e576e34697360218ee7d6a8ba929dff88f6")
+        self.directory("Nintendo 3DS")
+        self.directory("3DSBank/Slot0")
+        (self.root / "3DSBank/3DSBank.ini").write_bytes(ini)
+        expected_tree = {
+            "Nintendo 3DS": None,
+            "3DSBank": None,
+            "3DSBank/Slot0": None,
+            "3DSBank/3DSBank.ini": ini,
+        }
+
+        def tree_bytes():
+            return {p.relative_to(self.root).as_posix(): p.read_bytes() if p.is_file() else None
+                    for p in self.root.rglob("*")}
+
+        self.assertEqual(tree_bytes(), expected_tree)
+        root_before = self.root.stat()
+        # scan() also checks modes, mtimes, sizes and hashes. Its fopen wrapper
+        # enforces rb; the suite's import allowlist rejects filesystem write APIs.
+        self.scan()
+        self.assertEqual(self.meta, dict(active=1, stored=1, warnings=0, config=1, root=1, live=1))
+        expected_rows = {n: [f"Slot {n}", "absent"] for n in range(40)}
+        expected_rows[0][1] = "stored"
+        expected_rows[1][1] = "active (INI)"
+        self.assertEqual(self.rows, expected_rows)
+        self.assertEqual(tree_bytes(), expected_tree)
+        root_after = self.root.stat()
+        self.assertEqual((root_before.st_mode, root_before.st_mtime_ns, root_before.st_ctime_ns),
+                         (root_after.st_mode, root_after.st_mtime_ns, root_after.st_ctime_ns))
+
     def test_missing_config_does_not_guess_active_zero(self):
         self.directory("Nintendo 3DS")
         self.directory("3DSBank/Slot5")

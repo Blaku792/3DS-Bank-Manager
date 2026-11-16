@@ -97,6 +97,18 @@ including filesystem writes, and includes a negative test using `remove`.
 This is a regression guard, not a proof about transitive library behavior.
 Do not adapt the tests to a real SD card.
 
+`test_user_sd_configuration_in_disposable_fixture` recreates the configuration
+provided in [PR #2's fixture request](https://github.com/Blaku792/3DS-Bank-Manager/pull/2#issuecomment-6927021606)
+from its exact 28 bytes: `[3DSBANK]\r\nFOLDER_SLOT = 1\r\n`, with SHA-256
+`40da4e46ffa9254855393ba730043e576e34697360218ee7d6a8ba929dff88f6`.
+It creates only empty `Nintendo 3DS` and `3DSBank/Slot0` directories plus the INI
+inside a temporary directory. It verifies slot 1 active, slot 0 stored, all other
+slots absent, zero warnings, and identical fixture paths and bytes after scanning.
+The existing read-only open wrapper and import allowlist also apply. No physical
+SD is accessed and no game or console data is copied. This host regression is
+not evidence of successful Azahar or hardware execution; physical testing is
+not approved by this fixture request.
+
 Run the same suite with sanitizers (supported GCC/Linux hosts):
 
 ```sh
