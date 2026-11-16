@@ -6,10 +6,11 @@ fopen's rb/path arguments are also checked in the host fixture harness.
 import argparse
 import subprocess
 
+# __stack_chk_fail is compiler-emitted stack protection on hardened host GCC.
 SCANNER = set("""
 closedir fclose ferror fgetc fopen opendir readdir stat
 memset snprintf strchr strcmp strlen strncmp strtol
-__ctype_b_loc __errno_location _ctype_ __errno
+__ctype_b_loc __errno_location _ctype_ __errno __stack_chk_fail
 """.split())
 UI = set("""
 aptMainLoop banks_scan banks_status consoleClear consoleInit consoleSelect

@@ -17,7 +17,7 @@ class ImportAllowlist(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             obj = Path(tmp) / "banks.o"
             subprocess.run([os.environ.get("HOST_CC", "cc"), "-std=c11", "-Wall", "-Wextra",
-                            "-Werror", "-fno-builtin", "-I", str(REPO / "include"),
+                            "-Werror", "-fno-builtin", "-fstack-protector-strong", "-I", str(REPO / "include"),
                             "-c", str(REPO / "source/banks.c"), "-o", str(obj)], check=True)
             imports = check("nm", obj, SCANNER)
             self.assertIn("fopen", imports)
