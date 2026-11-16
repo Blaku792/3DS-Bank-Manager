@@ -8,24 +8,54 @@ permissions:
 jobs:
   host-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - name: Test discovery against disposable fixtures
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Test discovery, import allowlist and artifact validator
+        run: python3 -m unittest discover -s tests -v
+      - name: AddressSanitizer and UndefinedBehaviorSanitizer
+        env:
+          HOST_CFLAGS: -fsanitize=address,undefined -fno-omit-frame-pointer -g -fno-pie -no-pie
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: python3 -m unittest discover -s tests -v
   build-3ds:
+    needs: host-tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     container:
-      image: devkitpro/devkitarm:latest
+      image: devkitpro/devkitarm@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Compile native 3DS application
         run: make -j2
-      - name: Verify executable output
-        run: test -s 3DSBankManager.3dsx
-      - uses: actions/upload-artifact@v4
+      - name: Check native application import allowlist
+        run: python3 tools/check_imports.py --nm "$DEVKITARM/bin/arm-none-eabi-nm" --scanner build/banks.o --ui build/main.o
+      - name: Validate 3DSX and SMDH output
+        run: python3 tools/validate_artifacts.py 3DSBankManager.3dsx 3DSBankManager.smdh
+      - name: Record source revision and checksums
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          TOOLCHAIN_IMAGE: devkitpro/devkitarm@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          printf 'source_commit=%s\nrepository=%s\nbuild_url=%s/%s/actions/runs/%s\ntoolchain_image=%s\n' \
+            "$SOURCE_COMMIT" "$GITHUB_REPOSITORY" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$TOOLCHAIN_IMAGE" > SOURCE.txt
+          sha256sum 3DSBankManager.3dsx 3DSBankManager.smdh SOURCE.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cat SOURCE.txt SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: 3DSBankManager-v0.1
           path: |
             3DSBankManager.3dsx
             3DSBankManager.smdh
+            SOURCE.txt
+            SHA256SUMS
           if-no-files-found: error

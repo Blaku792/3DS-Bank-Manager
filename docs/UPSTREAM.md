@@ -47,9 +47,22 @@ The active slot is labeled `active (INI)` only when there is one valid explicit
 `FOLDER_SLOT` in range, `/Nintendo 3DS` is a directory, and the corresponding
 stored path is absent. Both paths present (or a stored-path read error) produce
 a conflict; no live folder produces an active-missing diagnostic. Invalid,
-duplicate, missing, or unreadable active metadata leaves selection unknown.
+duplicate, missing, or unreadable active metadata leaves selection unknown with a
+configuration warning. There must be exactly one matching section, including
+sections with no active key; aliases from later duplicates are not merged.
 Unlike upstream's default-to-zero behavior, the scanner does not guess on a
 card it will not modify. In particular, a live folder with no INI stays unknown.
+
+Upstream identifies section names through the first `]`, so suffix annotations
+such as `[3DSBANK] ; note`, `[3DSBANK] text`, and `[3DSBANK]=annotation` are
+recognized. The scanner follows that section-name rule, counts all matching
+sections, and leaves the active bank unknown if more than one exists, even if
+their keys agree or only the second supplies `FOLDER_SLOT`. A header missing its
+closing bracket also invalidates active metadata. Upstream's inner key loop
+checks `=` before checking section boundaries, so an `=` annotation on a later
+header can also be ambiguous; the scanner flags that instead of inferring a
+selection across it. CR and LF independently terminate lines (the LF half of a
+CRLF is harmless whitespace); a final unterminated line is parsed normally.
 
 The parser intentionally rejects malformed/trailing-junk slot values, duplicates,
 NULs, and oversized lines rather than reproducing permissive `strtol` behavior.
