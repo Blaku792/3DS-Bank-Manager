@@ -43,6 +43,13 @@ It enumerates `/3DSBank` once to flag unexpected entries without descending into
 them. It does not reproduce upstream's assumption that sorting all directories
 and using a cursor index always equals a slot number.
 
+Alias keys must match `SLOT_NAME_0` through `SLOT_NAME_39` exactly after trimming
+surrounding whitespace, as upstream constructs them with `to_string(i)`.
+Zero-padded keys such as `SLOT_NAME_02` are ignored with a configuration warning;
+they cannot replace or suppress `SLOT_NAME_2` regardless of key order. Without a
+canonical alias the default `Slot N` remains. An invalid alias alone does not
+invalidate a valid `FOLDER_SLOT` selection.
+
 The active slot is labeled `active (INI)` only when there is one valid explicit
 `FOLDER_SLOT` in range, `/Nintendo 3DS` is a directory, and the corresponding
 stored path is absent. Both paths present (or a stored-path read error) produce

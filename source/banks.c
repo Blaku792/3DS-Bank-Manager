@@ -125,6 +125,11 @@ static void read_config(const char *path, BankScan *scan)
         } else if (strncmp(key, "SLOT_NAME_", 10) == 0) {
             int n = slot_number(key + 10);
             if (n < 0) { scan->warnings |= WARN_CONFIG; continue; }
+            /* Upstream looks up exact decimal keys; padded aliases must not
+             * consume names_seen or shadow a later canonical spelling. */
+            char canonical[24];
+            snprintf(canonical, sizeof(canonical), "SLOT_NAME_%d", n);
+            if (strcmp(key, canonical)) { scan->warnings |= WARN_CONFIG; continue; }
             if (names_seen[n]) { scan->warnings |= WARN_CONFIG; continue; }
             names_seen[n] = 1;
             size_t len = strlen(value);

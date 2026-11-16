@@ -275,6 +275,41 @@ class Discovery(unittest.TestCase):
                 self.assertEqual(self.rows[2][0], "A" * min(length, 95))
                 self.assertEqual(self.meta["warnings"], 16 if length > 95 else 0)
 
+    def test_canonical_alias_keys_for_all_slots(self):
+        self.directory("Nintendo 3DS")
+        aliases = "".join(f" SLOT_NAME_{n} \t= Canonical {n}\n" for n in range(40))
+        self.config("[3DSBANK]\nFOLDER_SLOT=2\n" + aliases)
+        self.scan()
+        self.assertEqual(self.meta["warnings"], 0)
+        self.assertEqual(self.meta["active"], 2)
+        for n in range(40):
+            self.assertEqual(self.rows[n][0], f"Canonical {n}")
+
+    def test_noncanonical_alias_keys_are_ignored(self):
+        self.directory("Nintendo 3DS")
+        for suffix in ["00", "02", "002", "010", "039", "00000000000000000002",
+                       "", "+2", "-2", "2junk", "2.0", "0x2", " 2", "40"]:
+            with self.subTest(suffix=suffix):
+                self.config(f"[3DSBANK]\nFOLDER_SLOT=2\nSLOT_NAME_{suffix}=Ignored\n")
+                self.scan()
+                self.assertEqual(self.meta["warnings"], 2)  # Configuration, not I/O.
+                self.assertEqual(self.meta["active"], 2)
+                for n in range(40):
+                    self.assertEqual(self.rows[n][0], f"Slot {n}")
+
+    def test_zero_padded_alias_does_not_shadow_canonical_key(self):
+        self.directory("Nintendo 3DS")
+        for n in [0, 2, 10, 39]:
+            valid = f"SLOT_NAME_{n}=Canonical\n"
+            invalid = f"SLOT_NAME_0{n}=Ignored\n"
+            for aliases in [invalid + valid, valid + invalid]:
+                with self.subTest(slot=n, aliases=aliases):
+                    self.config("[3DSBANK]\nFOLDER_SLOT=2\n" + aliases)
+                    self.scan()
+                    self.assertEqual(self.rows[n][0], "Canonical")
+                    self.assertEqual(self.meta["warnings"], 2)
+                    self.assertEqual(self.meta["active"], 2)
+
     def test_line_buffer_boundaries(self):
         self.directory("Nintendo 3DS")
         for length in [510, 511, 512]:
