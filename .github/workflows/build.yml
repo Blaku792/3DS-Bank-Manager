@@ -44,7 +44,7 @@ jobs:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           TOOLCHAIN_IMAGE: devkitpro/devkitarm@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5
         run: |
-          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" = "$SOURCE_COMMIT"
           printf 'source_commit=%s\nrepository=%s\nbuild_url=%s/%s/actions/runs/%s\ntoolchain_image=%s\n' \
             "$SOURCE_COMMIT" "$GITHUB_REPOSITORY" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$TOOLCHAIN_IMAGE" > SOURCE.txt
           sha256sum 3DSBankManager.3dsx 3DSBankManager.smdh SOURCE.txt > SHA256SUMS
