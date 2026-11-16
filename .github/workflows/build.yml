@@ -1,0 +1,31 @@
+name: Build and test v0.1
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test discovery against disposable fixtures
+        run: python3 -m unittest discover -s tests -v
+  build-3ds:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile native 3DS application
+        run: make -j2
+      - name: Verify executable output
+        run: test -s 3DSBankManager.3dsx
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 3DSBankManager-v0.1
+          path: |
+            3DSBankManager.3dsx
+            3DSBankManager.smdh
+          if-no-files-found: error

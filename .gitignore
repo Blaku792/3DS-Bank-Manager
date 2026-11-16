@@ -1,0 +1,7 @@
+/build/
+/build-host/
+*.3dsx
+*.smdh
+*.elf
+*.map
+__pycache__/
