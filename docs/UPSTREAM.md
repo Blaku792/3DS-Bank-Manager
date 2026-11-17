@@ -47,8 +47,9 @@ Alias keys must match `SLOT_NAME_0` through `SLOT_NAME_39` exactly after trimmin
 surrounding whitespace, as upstream constructs them with `to_string(i)`.
 Zero-padded keys such as `SLOT_NAME_02` are ignored with a configuration warning;
 they cannot replace or suppress `SLOT_NAME_2` regardless of key order. Without a
-canonical alias the default `Slot N` remains. An invalid alias alone does not
-invalidate a valid `FOLDER_SLOT` selection.
+canonical alias the default `Slot N` remains. A noncanonical numeric alias alone
+does not invalidate a valid `FOLDER_SLOT` selection; structural control characters
+are handled conservatively as described below.
 
 The active slot is labeled `active (INI)` only when there is one valid explicit
 `FOLDER_SLOT` in range, `/Nintendo 3DS` is a directory, and the corresponding
@@ -71,6 +72,19 @@ header can also be ambiguous; the scanner flags that instead of inferring a
 selection across it. CR and LF independently terminate lines (the LF half of a
 CRLF is harmless whitespace); a final unterminated line is parsed normally.
 
+Upstream's `trimString` and key comparison trim only ASCII spaces and horizontal
+tabs. Vertical tabs (`0x0B`) and form feeds (`0x0C`) are not INI whitespace.
+For example, `FOLDER_SLOT\x0B=2` or `\x0C[3DSBANK]` prevents upstream from finding
+the requested key or section, so `GetInt(..., 0)` returns its default slot 0.
+The scanner must not turn either malformed configuration into an active slot 2.
+It trims only spaces/tabs and rejects unexpected ASCII controls (C0 except tab,
+plus DEL) in keys and section-header lines, including prefixes and annotations.
+Such data leaves the active bank unknown with `WARN_CONFIG`, even if a valid
+selection occurs earlier or later. Existing full-line comments are ignored.
+Alias values remain separately bounded and sanitized for display; control bytes
+in them do not become header or key syntax. Invalid active values still
+invalidate selection.
+
 The parser intentionally rejects malformed/trailing-junk slot values, duplicates,
 NULs, and oversized lines rather than reproducing permissive `strtol` behavior.
 Alias display is bounded and sanitized. Neither a valid INI nor a directory
@@ -79,3 +93,28 @@ check verifies encryption, console ownership, saves, or installed titles.
 No upstream implementation source is copied into the application. These links
 document the observed storage convention; upstream remains credited to its
 respective authors and under its own license.
+
+## Reproduce the original-parser comparison
+
+On a Linux host with Python 3, GCC/G++, GNU ld wrapping, and curl:
+
+```sh
+upstream_dir="$(mktemp -d)"
+for name in inifile.cpp inifile.h stringtool.cpp stringtool.h; do
+  curl --fail --silent --show-error --location \
+    "https://raw.githubusercontent.com/RocketRobz/3DSBank/5f23dac4f19fc94fdea279f7ea5d251f043ed12c/arm9/source/$name" \
+    --output "$upstream_dir/$name"
+done
+python3 tools/compare_upstream.py "$upstream_dir"
+```
+
+The comparison verifies each downloaded file's pinned SHA-256 before compiling
+the original parser and the production scanner into separate host executables.
+Only synthetic INIs in temporary directories are read. The upstream harness
+calls `GetInt("3DSBANK", "FOLDER_SLOT", 0)` and never calls `SaveIniFile` or the
+original application's entry point; its open wrapper rejects write modes.
+The host build maps newlib's `vasiprintf` to `vasprintf` and uses unsigned `char`
+to match the ARM target. No upstream implementation enters the 3DS executable.
+The comparison asserts both the upstream result and the scanner's conservative
+result, including warnings, instead of requiring them to agree on malformed
+input. GitHub Actions runs this comparison before the native build.

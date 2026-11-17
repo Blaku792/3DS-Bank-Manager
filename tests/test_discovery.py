@@ -193,6 +193,88 @@ class Discovery(unittest.TestCase):
         self.assertTrue(self.meta["warnings"] & 2)
         self.assertFalse(any(row[1] == "active (INI)" for row in self.rows.values()))
 
+    def assert_bad_structure(self, line):
+        self.directory("Nintendo 3DS")
+        # Malformed data must invalidate both earlier and later valid selections.
+        for prefix, suffix in [("", ""), ("FOLDER_SLOT=2\n", ""),
+                               ("", "FOLDER_SLOT=2\n")]:
+            with self.subTest(line=repr(line), prefix=prefix, suffix=suffix):
+                self.config("[3DSBANK]\n" + prefix + line + "\n" + suffix)
+                self.scan()
+                self.assert_unknown()
+                self.assertEqual(self.meta["warnings"], 2)
+
+    def test_vertical_tabs_in_keys(self):
+        for key in ["\vFOLDER_SLOT", "FOLDER\v_SLOT", "FOLDER_SLOT\v"]:
+            self.assert_bad_structure(key + "=2")
+
+    def test_form_feeds_in_keys(self):
+        for key in ["\fFOLDER_SLOT", "FOLDER\f_SLOT", "FOLDER_SLOT\f"]:
+            self.assert_bad_structure(key + "=2")
+
+    def assert_bad_header_prefix(self, control):
+        self.directory("Nintendo 3DS")
+        for whitespace in ["", " ", "\t", " \t"]:
+            with self.subTest(control=repr(control), whitespace=whitespace):
+                self.config(whitespace + control + "[3DSBANK]\nFOLDER_SLOT=2\n")
+                self.scan()
+                self.assert_unknown()
+                self.assertEqual(self.meta["warnings"], 2)
+
+    def test_vertical_tabs_before_headers(self):
+        self.assert_bad_header_prefix("\v")
+
+    def test_form_feeds_before_headers(self):
+        self.assert_bad_header_prefix("\f")
+
+    def test_controls_inside_headers_and_annotations(self):
+        for control in ["\v", "\f", "\x1b", "\x7f"]:
+            for header in [f"[3DS{control}BANK]", f"[3DSBANK{control}]",
+                           f"[3DSBANK] note{control}"]:
+                self.assert_bad_structure(header)
+
+    def test_malformed_section_boundary_invalidates_active(self):
+        for control in ["\v", "\f"]:
+            self.assert_bad_structure(control + "[OTHER]\nFOLDER_SLOT=3")
+
+    def test_all_unexpected_ascii_controls_in_keys(self):
+        # NUL already has its own bounded-input test. CR/LF delimit lines;
+        # horizontal tabs are the only permitted ASCII control within a key line.
+        for code in [*range(1, 9), 11, 12, *range(14, 32), 127]:
+            self.assert_bad_structure("FOLDER_SLOT" + chr(code) + "=2")
+
+    def test_controls_in_alias_keys_invalidate_active(self):
+        for control in ["\v", "\f"]:
+            for key in [control + "SLOT_NAME_2", "SLOT_NAME_2" + control]:
+                self.assert_bad_structure(key + "=Ignored")
+                self.assertEqual(self.rows[2][0], "Slot 2")
+
+    def test_controls_in_active_values_invalidate_active(self):
+        for control in ["\v", "\f", "\x1b", "\x7f"]:
+            for value in [control + "2", "2" + control, "2" + control + "3"]:
+                self.assert_bad_structure("FOLDER_SLOT=" + value)
+
+    def test_alias_value_controls_are_still_sanitized(self):
+        self.directory("Nintendo 3DS")
+        self.config("[3DSBANK]\nFOLDER_SLOT=2\nSLOT_NAME_2=Hi\v\f\x1b\t!\n")
+        self.scan()
+        self.assertEqual(self.meta["warnings"], 0)
+        self.assertEqual(self.meta["active"], 2)
+        self.assertEqual(self.rows[2], ["Hi????!", "active (INI)"])
+
+    def test_spaces_tabs_and_line_endings_remain_compatible(self):
+        self.directory("Nintendo 3DS")
+        for ending in ["\r", "\n", "\r\n"]:
+            for final in ["", ending]:
+                for slot in [0, 2, 39]:
+                    with self.subTest(ending=repr(ending), final=repr(final), slot=slot):
+                        self.config(ending.join([" \t[3DSBANK] ; note \t",
+                                                f" \tFOLDER_SLOT \t= \t{slot} \t"]) + final)
+                        self.scan()
+                        self.assertEqual(self.meta["warnings"], 0)
+                        self.assertEqual(self.meta["active"], slot)
+                        self.assertEqual(self.rows[slot], [f"Slot {slot}", "active (INI)"])
+
     def test_duplicate_sections_with_selection_only_in_second(self):
         self.directory("Nintendo 3DS")
         self.config("[3DSBANK]\nSLOT_NAME_2=First\n[3DSBANK]\nFOLDER_SLOT=2\n")

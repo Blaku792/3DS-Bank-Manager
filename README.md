@@ -97,6 +97,14 @@ including filesystem writes, and includes a negative test using `remove`.
 This is a regression guard, not a proof about transitive library behavior.
 Do not adapt the tests to a real SD card.
 
+Control-character regressions exercise the production scanner with vertical
+tabs, form feeds, and other unexpected ASCII controls in keys and headers.
+They also retain space/tab trimming, CR/LF/CRLF and final-line compatibility,
+valid slot selection, and alias-value sanitization. The suite contains 62 test
+methods (51 existing plus 11 control/whitespace regressions, with additional
+parameterized cases). See [the original-parser comparison](docs/UPSTREAM.md#reproduce-the-original-parser-comparison)
+to run the separate, SHA-256-pinned upstream compatibility checks used by CI.
+
 `test_user_sd_configuration_in_disposable_fixture` recreates the configuration
 provided in [PR #2's fixture request](https://github.com/Blaku792/3DS-Bank-Manager/pull/2#issuecomment-6927021606)
 from its exact 28 bytes: `[3DSBANK]\r\nFOLDER_SLOT = 1\r\n`, with SHA-256
@@ -146,4 +154,6 @@ as unknown with a configuration warning; folder presence alone does not identify
 the active bank. Headers such as `[3DSBANK] ; note` are supported, as are CR, LF,
 CRLF, and unterminated final lines. Duplicate matching sections (even empty ones)
 or duplicate active keys invalidate selection instead of choosing a section. An INI
-selection is metadata, not proof of bank identity or integrity.
+selection is metadata, not proof of bank identity or integrity. Only spaces and
+horizontal tabs are trimmed inside lines; unexpected control characters in keys
+or headers invalidate active selection and produce a configuration warning.

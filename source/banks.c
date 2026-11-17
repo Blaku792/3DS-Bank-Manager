@@ -29,11 +29,24 @@ static enum PathState inspect(const char *path, unsigned *warnings)
 static char *trim(char *s)
 {
     char *end;
-    while (*s && isspace((unsigned char)*s)) ++s;
+    /* Upstream trims only spaces and horizontal tabs, not C isspace(). */
+    while (*s == ' ' || *s == '\t') ++s;
     end = s + strlen(s);
-    while (end > s && isspace((unsigned char)end[-1])) --end;
+    while (end > s && (end[-1] == ' ' || end[-1] == '\t')) --end;
     *end = '\0';
     return s;
+}
+
+static int invalid_structure(const char *s)
+{
+    int header = *s == '[';
+    /* Check headers (including annotations) and keys before interpreting them.
+     * CR/LF have already delimited lines. Alias values are sanitized separately. */
+    for (; *s && (header || *s != '='); ++s) {
+        unsigned char c = (unsigned char)*s;
+        if ((c < 32 && c != '\t') || c == 127) return 1;
+    }
+    return 0;
 }
 
 static int slot_number(const char *s)
@@ -88,6 +101,12 @@ static void read_config(const char *path, BankScan *scan)
             (unsigned char)s[2] == 0xbf) s += 3;
         s = trim(s);
         if (!*s || *s == ';' || *s == '#' || *s == '/' || *s == '!') continue;
+        if (invalid_structure(s)) {
+            scan->warnings |= WARN_CONFIG;
+            bad_active = 1;
+            section = 0;
+            continue;
+        }
         if (*s == '[') {
             /* Upstream compares text through the first closing bracket, ignoring
              * suffix annotations. Count matching sections, even empty ones. */

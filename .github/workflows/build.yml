@@ -16,6 +16,15 @@ jobs:
           persist-credentials: false
       - name: Test discovery, import allowlist and artifact validator
         run: python3 -m unittest discover -s tests -v
+      - name: Compare with pinned original 3DSBank parser
+        run: |
+          upstream_dir="$(mktemp -d)"
+          for name in inifile.cpp inifile.h stringtool.cpp stringtool.h; do
+            curl --fail --silent --show-error --location \
+              "https://raw.githubusercontent.com/RocketRobz/3DSBank/5f23dac4f19fc94fdea279f7ea5d251f043ed12c/arm9/source/$name" \
+              --output "$upstream_dir/$name"
+          done
+          python3 tools/compare_upstream.py "$upstream_dir"
       - name: AddressSanitizer and UndefinedBehaviorSanitizer
         env:
           HOST_CFLAGS: -fsanitize=address,undefined -fno-omit-frame-pointer -g -fno-pie -no-pie
